@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+<style>
+    table {
+        margin-bottom: 5px;
+        max-width: 605px;
+    }
+    td {
+        background-color: rgb(240,240,240);
+        border: 1px solid black;
+        text-align:center;
+        padding:2px;
+    }
+</style>
+
+</head>
+<body>
+
+<button id="start" style="height:30px; width:150px; margin-bottom: 5px;"> START </button>
+<button id="stepf" style="height:30px; width:150px; margin-bottom: 5px;" disabled> STEP FORWARD </button>
+<button id="stepb" style="height:30px; width:150px; margin-bottom: 5px;" disabled> STEP BACK </button>
+<button id="clearr" style="height:30px; width:150px; margin-bottom: 5px;"> CLEAR </button>
+
+<br>
+<button id="pllay" style="height:30px; width:150px; margin-bottom: 5px;"> PLAY </button>
+<button id="pauss" style="height:30px; width:150px; margin-bottom: 5px;"> PAUSE </button>
+<button id="randB" style="height:30px; width:150px; margin-bottom: 5px;"> RANDOM </button>
+<button id="exampB" style="height:30px; width:150px; margin-bottom: 5px;"> NEXT EXAMPLE </button>
+<font size="0.5">
+<table id="tpoints" style="border: 1px solid black;">
+    <tr>
+        <td>-</td>
+    </tr>
+    <tr>
+        <td>-</td>
+    </tr>
+</table>
+</font>
+<font size="2">
+<table id="updown"></table>
+</font>
+<canvas id="canv" width="605" height="400" style="border:4px solid rgb(64,64,64);" ></canvas>
+<h4 id="explaining" style="position: absolute; left: 640px; top: 200px; max-width: 400px;"> </h4>
+
+<h4 id="explaining" style="position: absolute; left: 640px; top: -15px; max-width: 700px;">
+    Алгоритм сортирует вершины по возрастанию координаты X (в случае равенства - по возрастанию Y) за O(n * log(n)),
+    затем  последовательно рассматривает точки, определяя, добавлять их в нижнюю часть оболочки, верхнюю или ни в какую.
+    Так как каждая точка может быть добавлена в верхнюю и нижнюю части оболочки и удалена из них не более 1 раза,
+    это потребует O(n) времени.
+</h4>
+<script>
+    document.body.style.backgroundColor = "rgb(217,217,217)";
+
+    var updwn = document.getElementById("updown");
+    var ply = document.getElementById("pllay");
+    var pse = document.getElementById("pauss");
+    var rnd = document.getElementById("randB");
+    var exm = document.getElementById("exampB");
+    var strt = document.getElementById("start");
+    var stf = document.getElementById("stepf");
+    var stb = document.getElementById("stepb");
+    var cle = document.getElementById("clearr");
+    var canvas = document.getElementById("canv");
+    var ctx = canvas.getContext("2d");
+    var tps = document.getElementById("tpoints");
+    var expl = document.getElementById("explaining");
+
+    var blsize = 40;
+    var gwdt = canvas.width;
+    var ghgt = canvas.height;
+    // var dw = dcanv.width;
+    // var dh = dcanv.height;
+
+    var stnum = -1;
+    var alg = 0;
+    var ind = 1;
+    var up = [];
+    var down = [];
+    var ddx = 0;
+    var ddy = 0;
+    var ccx = 0;
+    var ccy = 0;
+    var clim = 0;
+    var intervalP;
+    var dwnrow;
+    var uprow;
+    var resrow;
+    var exampn = 0;
+
+
+    function reCreateUpDown() {
+        while (updwn.rows.length > 0) {
+            updwn.deleteRow(0);
+        }
+        uprow = updwn.insertRow();
+        var clr = uprow.insertCell();
+        clr.innerText = "UP:";
+        dwnrow = updwn.insertRow();
+        clr = dwnrow.insertCell();
+        clr.innerText = "DOWN:"
+
+        resrow = updwn.insertRow();
+        clr = resrow.insertCell();
+        clr.innerText = "RESULT:"
+    }
+
+    function fillResult() {
+        for (let i = 0; i < up.length; i++) {
+            var clr = resrow.insertCell();
+            clr.innerText = dots.indexOf(up[i]).toString();
+        }
+        for (let i = down.length - 2; i > 0; i--) {
+            var clr = resrow.insertCell();
+            clr.innerText = dots.indexOf(down[i]).toString();
+        }
+        expl.innerText = "Теперь объединяем начала и концы верхней и нижней частей выпуклой оболочки, записываем результат. Оболочка получена."
+    }
+
+    reCreateUpDown();
+    drawGrid(ctx, gwdt, ghgt);
+
+    var dots = [];
+
+    function stobX(x) {
+        return x * blsize + 14;
+    }
+
+    function stobY(y) {
+        return ghgt - 14 - y % 100 * blsize;
+    }
+
+    function getX(x) {
+        return Math.floor(x / 100);
+    }
+
+    function getY(y) {
+        return y % 100;
+    }
+
+    function preplineF(a, b) {
+        const ax = stobX(getX(a));
+        const ay = stobY(getY(a));
+        const cx = stobX(getX(b));
+        const cy = stobY(getY(b));
+        ctx.lineWidth = 3;
+        ddx = (cx - ax) / 10;
+        ddy = (cy - ay) / 10;
+        ccx = ax + 5 * ddx;
+        ccy = ay + 5 * ddy;
+        clim = 0;
+        ctx.moveTo(ccx, ccy);
+        ctx.beginPath();
+    }
+
+    function preplineC(a, b) {
+        const ax = stobX(getX(a));
+        const ay = stobY(getY(a));
+        const cx = stobX(getX(b));
+        const cy = stobY(getY(b));
+        ctx.lineWidth = 3;
+        ddx = (cx - ax) / 20;
+        ddy = (cy - ay) / 20;
+        ccx = ax;
+        ccy = ay;
+        clim = 0;
+    }
+
+    function aniLineD() {
+        if (++clim > 20) return;
+
+        ctx.strokeStyle = "rgba(0,0,0,0.16)";
+        ctx.lineTo(ccx + clim * ddx, ccy + clim * ddy);
+        ctx.lineTo(ccx - clim * ddx, ccy - clim * ddy);
+        ctx.stroke();
+        window.requestAnimationFrame(aniLineD);
+    }
+
+    function aniLineUp() {
+        if (++clim > 20) return;
+        ctx.beginPath();
+        ctx.moveTo(ccx, ccy);
+        ccx += ddx; ccy += ddy;
+        ctx.strokeStyle = "rgba(90,131,0,0.69)";
+        ctx.lineTo(ccx, ccy);
+        ctx.stroke();
+        window.requestAnimationFrame(aniLineUp);
+    }
+
+    function aniLineDown() {
+        if (++clim > 20) return;
+        ctx.beginPath();
+        ctx.moveTo(ccx, ccy);
+        ccx += ddx; ccy += ddy;
+        ctx.strokeStyle = "rgba(0,131,123,0.69)";
+        ctx.lineTo(ccx, ccy);
+        ctx.stroke();
+        window.requestAnimationFrame(aniLineDown);
+    }
+
+    function checkUp(a, b, c) {
+        const ax = getX(a);
+        const ay = getY(a);
+        const bx = getX(b);
+        const by = getY(b);
+        const cx = getX(c);
+        const cy = getY(c);
+        return (by - ay) * (cx - ax) <= (cy - ay) * (bx - ax);
+    }
+
+    function checkDown(a, b, c) {
+        const ax = getX(a);
+        const ay = getY(a);
+        const bx = getX(b);
+        const by = getY(b);
+        const cx = getX(c);
+        const cy = getY(c);
+        return (by - ay) * (cx - ax) >= (cy - ay) * (bx - ax);
+    }
+
+    function fforw() {
+        if (alg === 0) {
+            if (up.length === 1) {
+                up.push(dots[ind]);
+                alg = 2;
+            } else {
+                alg = 1;
+                return;
+            }
+        } else if (alg === 1) {
+            if (checkUp(up[up.length - 2], up[up.length - 1], dots[ind])) {
+                up.pop();
+                alg = 0;
+                fforw();
+                return;
+            } else {
+                up.push(dots[ind]);
+                alg = 2;
+            }
+        } else if (alg === 2) {
+            if (down.length === 1) {
+                down.push(dots[ind]);
+                ++ind;
+                alg = 0;
+            } else {
+                alg = 3;
+                return;
+            }
+        } else {
+            if (checkDown(down[down.length - 2], down[down.length - 1], dots[ind])) {
+                down.pop();
+                alg = 2;
+                fforw();
+                return;
+            } else {
+                down.push(dots[ind]);
+                alg = 0;
+                ++ind;
+            }
+        }
+    }
+
+    function forw() {
+        clim = 20;
+        ++stnum;
+        expl.innerHTML = "Шаг " + stnum.toString() + ": Рассматриваем точку " + ind.toString() + "." + "<br /> <br />";
+        var al = 0;
+        if (alg === 0) {
+            if (up.length === 1) {
+                expl.innerText += "Верхняя оболочка состоит из 1-ой точки, поэтому добавляем рассматриваемую точку.";
+                up.push(dots[ind]);
+                alg = 2;
+                al = 1;
+            } else {
+                expl.innerText += "Проводим прямую через рассматриваемую и предпоследнюю точку верхней оболочки (фиолетовые).";
+                alg = 1;
+                if (checkUp(up[up.length - 2], up[up.length - 1], dots[ind])) {
+                    expl.innerHTML += "<br /> <br />" + "Последняя точка верхней оболочки (желтая) не выше проведенной прямой, поэтому она не остается в верхней оболочке.";
+                } else {
+                    expl.innerHTML += "<br /> <br />" + "Последняя точка верхней оболочки (желтая) выше проведенной прямой, поэтому она остается в верхней оболочке.";
+                }
+                drawAll(up, down);
+                stampDot(up[up.length - 2]);
+                stampDot(up[up.length - 1], "rgba(225,212,0,0.69)");
+                stampDot(dots[ind]);
+                preplineF(up[up.length - 2], dots[ind]);
+                window.requestAnimationFrame(aniLineD);
+                return;
+            }
+        } else if (alg === 1) {
+            if (checkUp(up[up.length - 2], up[up.length - 1], dots[ind])) {
+                up.pop();
+                alg = 0;
+                --stnum;
+                forw();
+                return;
+            } else {
+                expl.innerText += "Добавляем рассматриваемую точку.";
+                up.push(dots[ind]);
+                alg = 2;
+                al = 1;
+            }
+        } else if (alg === 2) {
+            if (down.length === 1) {
+                expl.innerText += "Нижняя оболочка состоит из 1-ой точки, поэтому добавляем рассматриваемую точку.";
+                down.push(dots[ind]);
+                ++ind;
+                alg = 0;
+                al = -1;
+            } else {
+                expl.innerText += "Проводим прямую через рассматриваемую и предпоследнюю точку нижней оболочки (фиолетовые).";
+                alg = 3;
+
+                if (checkDown(down[down.length - 2], down[down.length - 1], dots[ind])) {
+                    expl.innerHTML += "<br /> <br />" + "Последняя точка нижней оболочки (оранжевая) не ниже проведенной прямой, поэтому она не остается в нижней оболочке.";
+                } else {
+                    expl.innerHTML += "<br /> <br />" + "Последняя точка нижней оболочки (оранжевая) ниже проведенной прямой, поэтому она остается в нижней оболочке.";
+                }
+                drawAll(up, down);
+                stampDot(down[down.length - 2]);
+                stampDot(down[down.length - 1], "rgba(225,90,0,0.69)");
+                stampDot(dots[ind]);
+                preplineF(down[down.length - 2], dots[ind]);
+                window.requestAnimationFrame(aniLineD);
+                return;
+            }
+        } else {
+            if (checkDown(down[down.length - 2], down[down.length - 1], dots[ind])) {
+                down.pop();
+                alg = 2;
+                --stnum;
+                forw();
+                return;
+            } else {
+                expl.innerText += "Добавляем рассматриваемую точку.";
+                down.push(dots[ind]);
+                alg = 0;
+                al = -1;
+                ++ind;
+            }
+        }
+        drawAll(up, down, al);
+        if (ind >= dots.length) {
+            stf.disabled = true;
+            clearInterval(intervalP);
+            intervalP = undefined;
+            fillResult();
+        }
+    }
+
+    function drawAll(up, down, al = 0) {
+        reCreateUpDown();
+        ctx.lineWidth = 3;
+        drawGrid(ctx, gwdt, ghgt);
+        let j = 0, k = 0;
+        for (let i = 0; i < dots.length; i++) {
+            let flag = 0;
+            if (j < up.length && up[j] === dots[i]) {
+                drawDot(dots, i, "rgba(90,131,0,0.69)");
+                ++j;
+                ++flag;
+                if (j > 0 && al === 1 && j === up.length - 1) {
+                    var cll = uprow.insertCell();
+                    cll.innerText = i.toString();
+                    preplineC(up[j - 1], up[j]);
+                    window.requestAnimationFrame(aniLineUp);
+                } else if (j > 0) {
+                    var cll = uprow.insertCell();
+                    cll.innerText = i.toString();
+                    ctx.strokeStyle = "rgba(90,131,0,0.69)";
+                    ctx.beginPath();
+                    ctx.moveTo(stobX(getX(up[j - 1])) , stobY(getY(up[j - 1])));
+                    ctx.lineTo(stobX(getX(up[j])) , stobY(getY(up[j])));
+                    ctx.stroke();
+                }
+            }
+            if (k < down.length && down[k] === dots[i]) {
+                drawDot(dots, i, "rgba(0,131,123,0.69)");
+                ++k;
+                ++flag;
+                if (k > 0 && al === -1 && k === down.length - 1) {
+                    var cll = dwnrow.insertCell();
+                    cll.innerText = i.toString();
+                    preplineC(down[k - 1], down[k]);
+                    window.requestAnimationFrame(aniLineDown);
+                } else if (k > 0) {
+                    var cll = dwnrow.insertCell();
+                    cll.innerText = i.toString();
+                    ctx.strokeStyle = "rgba(0,131,123,0.69)";
+                    ctx.beginPath();
+                    ctx.moveTo(stobX(getX(down[k - 1])) , stobY(getY(down[k - 1])));
+                    ctx.lineTo(stobX(getX(down[k])) , stobY(getY(down[k])));
+                    ctx.stroke();
+                }
+            }
+            if (flag === 0) {
+                if (k !== down.length || j !== up.length)
+                    drawDot(dots, i, "rgba(165,0,11,0.65)");
+                else
+                    drawDot(dots, i);
+            } else if (flag === 2) {
+                drawDot(dots, i, "rgb(228,228,228)", false);
+                ctx.fillStyle = "rgb(74,74,74)";
+                ctx.fillRect(stobX(getX(dots[i])) - 7, stobY(getY(dots[i])), 14, 1);
+                ctx.fillRect(stobX(getX(dots[i])), stobY(getY(dots[i])) - 7, 1, 14);
+                drawDot(dots, i, "rgba(0,131,28,0.69)", false);
+            }
+        }
+    }
+
+    function drawGrid(ctx, wdt, hgt) {
+        ctx.fillStyle = "rgb(228,228,228)";
+        ctx.fillRect(0, 0, wdt, hgt);
+        ctx.fillStyle = "rgb(74,74,74)";
+        ctx.fillRect(14, 0, 2, hgt);
+        ctx.fillRect(0, hgt - 14, wdt, 2);
+        ctx.fillStyle = ("rgb(114,114,114)");
+        var j = 0;
+        for (let i = 14; i < Math.max(hgt, wdt); i += blsize) {
+            ctx.fillRect(i, 0, 1, hgt);
+            ctx.fillRect(0, hgt - i, wdt, 1);
+            ctx.fillText(j.toString(), i + 3, hgt - 3);
+            ctx.fillText(j.toString(), 8, hgt - 2 - i);
+            ++j;
+        }
+    }
+
+    function stampDot(crd, fillSt = "rgba(160,0,225,0.69)") {
+        ctx.beginPath();
+        ctx.strokeStyle = "rgba(29,29,29,0.8)";
+        ctx.fillStyle = fillSt;
+        ctx.arc(stobX(getX(crd)), stobY(getY(crd)), 12, 0, 6.283185, false);
+        ctx.stroke();
+        ctx.fill();
+    }
+
+    function fillCords() {
+        while (tps.rows.length > 0) {
+            tps.deleteRow(0);
+        }
+        var rr1 = tps.insertRow();
+        var rr2 = tps.insertRow();
+        if (dots.length === 0) {
+            var cll = rr1.insertCell();
+            cll.innerText = '-';
+            cll = rr2.insertCell();
+            cll.innerText = '-';
+        }
+        for (let i = 0; i < dots.length; i++) {
+            var cll = rr1.insertCell(i);
+            cll.innerText = i.toString();
+            cll = rr2.insertCell(i);
+            cll.innerText = '(' + getX(dots[i]).toString() + ', ' + getY(dots[i]).toString() + ')';
+        }
+    }
+
+    function drawDot(dots, i, fillSt = "rgba(87,87,87,0.8)", toTEXT = true) {
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = "rgba(29,29,29,0.8)";
+        ctx.beginPath();
+        ctx.fillStyle = fillSt;
+        x = stobX(getX(dots[i]));
+        y = stobY(getY(dots[i]));
+        ctx.arc(x, y, 8, 0, 6.283185, false);
+        ctx.stroke();
+        ctx.fill();
+        if (toTEXT) {
+            ctx.fillStyle = 'black';
+            ctx.fillText(i.toString(), x + 7, y - 7, 20);
+        }
+    }
+
+    function addPoint(x, y, wdt, hgt) {
+        const put = Math.round((x - 14) / blsize) * 100 + Math.round((hgt - 14 - y) / blsize);
+        if (dots.indexOf(put) === -1) {
+            if (0 <= stobX(getX(put)) &&
+                stobX(getX(put)) <= wdt &&
+                0 <= stobY(getY(put)) &&
+                stobY(getY(put)) <= hgt) {
+                    dots.push(put);
+                    return true;
+            }
+        } else {
+            return put;
+        }
+    }
+
+    canvas.addEventListener('mousedown', function(e) {
+        var x =  e.pageX - this.offsetLeft - 5;
+        var y =  e.pageY - this.offsetTop - 5;
+        var put = addPoint(x, y, gwdt, ghgt);
+        if (put === undefined) return;
+        clearInterval(intervalP);
+        intervalP = undefined;
+        if (stnum >= 0) {
+            up = [];
+            down = [];
+            stf.disabled = true;
+            stb.disabled = true;
+            drawAll(up, down);
+            stnum = -1;
+        }
+        if (put === true) {
+            drawDot(dots, dots.length - 1);
+        } else {
+            dots.splice(dots.indexOf(put), 1);
+            drawGrid(ctx, gwdt, ghgt);
+            for (let i = 0; i < dots.length; i++) {
+                drawDot(dots, i);
+            }
+        }
+        fillCords();
+        expl.innerText = "";
+    }, false);
+
+    strt.addEventListener('click', function () {
+        if (dots.length === 1) return;
+        clearInterval(intervalP);
+        if (dots.length === 0) dots = [405, 607, 807, 1005, 803, 603, 705];
+        dots.sort((a, b) => a - b);
+        stf.disabled = false;
+        alg = 0;
+        ind = 1;
+        up = [dots[0]];
+        down = [dots[0]];
+        stnum = 0;
+        fillCords();
+        drawAll(up, down);
+        expl.innerText = "Добавляем точку 0.";
+    });
+
+    stf.addEventListener('click', function () {
+        clearInterval(intervalP);
+        intervalP = undefined;
+        stb.disabled = false;
+        forw();
+    });
+
+    stb.addEventListener('click', function () {
+        clim = 20;
+        clearInterval(intervalP);
+        intervalP = undefined;
+        stf.disabled = false;
+        alg = 0;
+        ind = 1;
+        up = [dots[0]];
+        down = [dots[0]];
+        stnum -= 2;
+        if (stnum === 0) {
+            drawAll(up, down);
+            stb.disabled = true;
+            return;
+        }
+        for (let i = 0; i < stnum; i++) {
+            fforw(dots);
+        }
+        forw();
+    });
+
+    rnd.addEventListener('click', function () {
+        clim = 20;
+        clearInterval(intervalP);
+        intervalP = undefined;
+        stf.disabled = true;
+        stb.disabled = true;
+        alg = 0;
+        ind = 1;
+        up = [];
+        down = [];
+        dots = [];
+        let nn = Math.random() * 15 + 8;
+        for (let i = 0; i < nn; i++) {
+            addPoint(Math.random() * gwdt / 2 + gwdt / 4, Math.random() * ghgt / 2 + ghgt / 4, gwdt, ghgt);
+        }
+        stnum = -1;
+        drawAll(up, down);
+        fillCords();
+        expl.innerText = "";
+    });
+
+    cle.addEventListener('click', function () {
+        clim = 20;
+        clearInterval(intervalP);
+        intervalP = undefined;
+        stf.disabled = true;
+        stb.disabled = true;
+        alg = 0;
+        ind = 1;
+        up = [];
+        down = [];
+        dots = [];
+        stnum = -1;
+        drawGrid(ctx, gwdt, ghgt);
+        fillCords();
+        expl.innerText = "";
+    });
+
+    ply.addEventListener('click', function () {
+        if (intervalP || dots.length === 1) return;
+
+        if (stnum === -1) {
+            if (dots.length === 0) dots = [405, 607, 807, 1005, 803, 603, 705];
+            dots.sort((a, b) => a - b);
+            stf.disabled = false;
+            alg = 0;
+            ind = 1;
+            up = [dots[0]];
+            down = [dots[0]];
+            stnum = 0;
+            drawAll(up, down);
+            fillCords();
+            expl.innerText = "Добавляем точку 0.";
+        }
+        if (ind >= dots.length) return;
+        stb.disabled = false;
+        intervalP = setInterval(forw, 1200);
+    });
+
+    pse.addEventListener('click', function () {
+        clearInterval(intervalP);
+        intervalP = undefined;
+    });
+
+    exm.addEventListener('click', function() {
+        clim = 20;
+        clearInterval(intervalP);
+        intervalP = undefined;
+        stf.disabled = true;
+        stb.disabled = true;
+        alg = 0;
+        ind = 1;
+        up = [];
+        down = [];
+        if (exampn === 0) {
+            expl.innerText = "На этом примере хорошо видно основной принцип работы.";
+            dots = [305, 503, 507,	704, 705, 706, 903, 907, 1105];
+
+        } else if (exampn === 1) {
+            expl.innerText = "В этом примере показательно, как точки 1, 2, 3 сначала добавляются в верхнюю часть оболочки," +
+                " а затем из нее удаляются с появлением 4.";
+            dots = [101, 302, 603, 1004, 1109, 1301];
+        } else {
+
+            expl.innerText = "В этом примере показательно, как алгоритм  отрабатывает точки на одной вертикали.";
+            dots = [505, 1102,	1108, 1203,	1204, 1205,	1206, 1207];
+        }
+
+
+        exampn = (exampn + 1) % 3;
+
+        stnum = -1;
+        drawAll(up, down);
+        fillCords();
+    });
+
+</script>
+</body>
+</html>
